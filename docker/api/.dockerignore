@@ -1,0 +1,47 @@
+# 依赖
+node_modules
+.pnpm-store
+
+# 构建产物
+dist
+*.local
+
+# 开发文件
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# 日志
+*.log
+logs
+daily-dev-log
+daily-prod-log
+
+# 测试
+coverage
+.nyc_output
+test
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# Git
+.git
+.gitignore
+
+# 文档
+README.md
+*.md
+docs
+
+# 数据文件（如果很大）
+data
+
+# 其他
+.DS_Store
+Thumbs.db
+
