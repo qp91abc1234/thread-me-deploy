@@ -1,0 +1,26 @@
+# 环境变量文件
+.env
+.env.local
+.env.*.local
+
+# 日志文件
+logs/
+*.log
+
+# 项目目录（从git拉取的代码）
+../thread-me-admin/
+../thread-me-api/
+
+# Docker相关
+docker-compose.override.yml
+
+# 临时文件
+*.tmp
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+

@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  # 前端服务
+  thread-me-admin:
+    build:
+      context: ../../thread-me-admin
+      dockerfile: Dockerfile
+      args:
+        VITE_BASE_URL: ${VITE_BASE_URL:-/api}
+    image: ${FRONTEND_IMAGE_NAME:-thread-me-admin}:latest
+    container_name: ${FRONTEND_CONTAINER_NAME:-thread-me-admin}
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    networks:
+      - thread-me-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 后端服务
+  thread-me-api:
+    build:
+      context: ../../thread-me-api
+      dockerfile: Dockerfile
+    image: ${BACKEND_IMAGE_NAME:-thread-me-api}:latest
+    container_name: ${BACKEND_CONTAINER_NAME:-thread-me-api}
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    networks:
+      - thread-me-network
+    environment:
+      # Node 环境
+      - NODE_ENV=${NODE_ENV:-production}
+      
+      # 应用配置
+      - APP_URL=${APP_URL}
+      
+      # JWT 配置
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_TOKEN_EXPIRE_TIME=${JWT_ACCESS_TOKEN_EXPIRE_TIME:-30m}
+      - JWT_REFRESH_TOKEN_EXPIRE_TIME=${JWT_REFRESH_TOKEN_EXPIRE_TIME:-7d}
+      
+      # OAuth 配置
+      - OAUTH_DEFAULT_PASSWORD=${OAUTH_DEFAULT_PASSWORD}
+      - OAUTH_DEFAULT_ROLE_NAME=${OAUTH_DEFAULT_ROLE_NAME}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_SECRET=${GITHUB_SECRET}
+      
+      # 日志配置
+      - WINSTON_MAX_FILES=${WINSTON_MAX_FILES:-14d}
+      - WINSTON_MAX_SIZE=${WINSTON_MAX_SIZE:-10M}
+      
+      # 数据库配置
+      - DATABASE_URL=${DATABASE_URL}
+      
+      # Redis 配置
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB:-0}
+      
+      # Throttler 配置
+      - THROTTLE_TTL=${THROTTLE_TTL:-60}
+      - THROTTLE_LIMIT=${THROTTLE_LIMIT:-100}
+      
+      # 阿里云 OSS 配置
+      - OSS_REGION=${OSS_REGION}
+      - OSS_BUCKET=${OSS_BUCKET}
+      - OSS_ACCESS_KEY_ID=${OSS_ACCESS_KEY_ID}
+      - OSS_ACCESS_KEY_SECRET=${OSS_ACCESS_KEY_SECRET}
+      
+      # QQ 邮箱配置（可选）
+      - QQ_MAIL_AUTH_CODE=${QQ_MAIL_AUTH_CODE:-}
+      
+      # LangChain 配置
+      - OPENAI_PROXY_KEY=${OPENAI_PROXY_KEY}
+      - OPENAI_PROXY_URL=${OPENAI_PROXY_URL}
+      - ALI_KEY=${ALI_KEY}
+    volumes:
+      # 日志目录挂载
+      - ./logs/api:/app/daily-prod-log
+      # 上传文件目录挂载（如果需要持久化）
+      - ./data/uploads:/app/public/upload
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - thread-me-admin
+
+networks:
+  thread-me-network:
+    name: ${DOCKER_NETWORK_NAME:-thread-me-network}
+    driver: bridge
+
+volumes:
+  api-logs:
+  upload-data:
+
