@@ -110,6 +110,123 @@ create_directories() {
     success "目录结构创建完成"
 }
 
+# 验证 MySQL 密码是否符合要求（MySQL 8.0 MEDIUM 策略）
+validate_mysql_password() {
+    local password=$1
+    
+    # 检查长度（至少8个字符）
+    if [ ${#password} -lt 8 ]; then
+        echo "密码长度至少需要 8 个字符"
+        return 1
+    fi
+    
+    # 检查是否包含数字
+    if ! echo "$password" | grep -q '[0-9]'; then
+        echo "密码必须包含至少 1 个数字"
+        return 1
+    fi
+    
+    # 检查是否包含小写字母
+    if ! echo "$password" | grep -q '[a-z]'; then
+        echo "密码必须包含至少 1 个小写字母"
+        return 1
+    fi
+    
+    # 检查是否包含大写字母
+    if ! echo "$password" | grep -q '[A-Z]'; then
+        echo "密码必须包含至少 1 个大写字母"
+        return 1
+    fi
+    
+    # 检查是否包含特殊字符
+    if ! echo "$password" | grep -q '[^a-zA-Z0-9]'; then
+        echo "密码必须包含至少 1 个特殊字符"
+        return 1
+    fi
+    
+    return 0
+}
+
+# 验证 Redis 密码
+validate_redis_password() {
+    local password=$1
+    
+    # 检查长度（建议至少8个字符）
+    if [ ${#password} -lt 8 ]; then
+        echo "Redis 密码建议至少 8 个字符"
+        return 1
+    fi
+    
+    return 0
+}
+
+# 生成符合 MySQL 要求的随机密码
+generate_mysql_password() {
+    local password=""
+    local lower="abcdefghijklmnopqrstuvwxyz"
+    local upper="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    local digits="0123456789"
+    local special="!@#\$%^&*()_+-=[]{}|;:,.<>?"
+    local all_chars="$lower$upper$digits$special"
+    
+    # 使用 openssl 生成随机索引来选取字符
+    local get_random_char() {
+        local chars=$1
+        local len=${#chars}
+        # 生成 0 到 len-1 之间的随机数
+        local rand_hex=$(openssl rand -hex 2)
+        local index=$((0x${rand_hex} % len))
+        echo "${chars:$index:1}"
+    }
+    
+    # 确保至少包含每种类型的字符
+    password+=$(get_random_char "$lower")
+    password+=$(get_random_char "$lower")
+    password+=$(get_random_char "$upper")
+    password+=$(get_random_char "$upper")
+    password+=$(get_random_char "$digits")
+    password+=$(get_random_char "$digits")
+    password+=$(get_random_char "$special")
+    password+=$(get_random_char "$special")
+    
+    # 添加随机字符到至少16位
+    while [ ${#password} -lt 16 ]; do
+        password+=$(get_random_char "$all_chars")
+    done
+    
+    # 将密码转换为数组，然后随机打乱
+    local password_array=()
+    local i=0
+    while [ $i -lt ${#password} ]; do
+        password_array+=("${password:$i:1}")
+        i=$((i+1))
+    done
+    
+    # 使用 Fisher-Yates 洗牌算法打乱
+    local n=${#password_array[@]}
+    local j
+    for ((i=$n-1; i>0; i--)); do
+        rand_hex=$(openssl rand -hex 2)
+        j=$((0x${rand_hex} % (i+1)))
+        local temp="${password_array[$i]}"
+        password_array[$i]="${password_array[$j]}"
+        password_array[$j]="$temp"
+    done
+    
+    # 重新组合密码
+    password=""
+    for char in "${password_array[@]}"; do
+        password+="$char"
+    done
+    
+    echo "$password"
+}
+
+# 生成 Redis 随机密码
+generate_redis_password() {
+    openssl rand -base64 16 | tr -d "=+/" | cut -c1-16
+}
+
 # 生成 Nginx 默认配置文件
 generate_nginx_conf() {
     if [ -f "$NGINX_DEFAULT_CONF" ]; then
@@ -184,24 +301,71 @@ generate_docker_compose() {
     
     # 提示用户输入 MySQL root 密码
     echo ""
-    read -sp "请输入 MySQL root 密码（留空将自动生成随机密码）: " MYSQL_ROOT_PASSWORD_INPUT
+    info "MySQL 密码要求（MySQL 8.0 MEDIUM 策略）："
+    echo "  - 至少 8 个字符"
+    echo "  - 包含至少 1 个数字"
+    echo "  - 包含至少 1 个小写字母"
+    echo "  - 包含至少 1 个大写字母"
+    echo "  - 包含至少 1 个特殊字符"
     echo ""
-    if [ -z "$MYSQL_ROOT_PASSWORD_INPUT" ]; then
-        MYSQL_ROOT_PASSWORD=$(openssl rand -base64 16 | tr -d "=+/" | cut -c1-16)
-        info "已自动生成 MySQL root 密码: $MYSQL_ROOT_PASSWORD"
-    else
-        MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD_INPUT"
-    fi
+    
+    MYSQL_ROOT_PASSWORD=""
+    while true; do
+        read -sp "请输入 MySQL root 密码（留空将自动生成随机密码）: " MYSQL_ROOT_PASSWORD_INPUT
+        echo ""
+        
+        if [ -z "$MYSQL_ROOT_PASSWORD_INPUT" ]; then
+            MYSQL_ROOT_PASSWORD=$(generate_mysql_password)
+            info "已自动生成 MySQL root 密码: $MYSQL_ROOT_PASSWORD"
+            break
+        else
+            local validation_error
+            validation_error=$(validate_mysql_password "$MYSQL_ROOT_PASSWORD_INPUT" 2>&1)
+            if [ $? -eq 0 ]; then
+                MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD_INPUT"
+                break
+            else
+                warn "密码不符合要求: $validation_error"
+                read -p "是否重新输入？(Y/n): " -n 1 -r
+                echo ""
+                if [[ $REPLY =~ ^[Nn]$ ]]; then
+                    error_exit "用户取消密码输入"
+                fi
+            fi
+        fi
+    done
     
     # 提示用户输入 Redis 密码
-    read -sp "请输入 Redis 密码（留空将自动生成随机密码）: " REDIS_PASSWORD_INPUT
     echo ""
-    if [ -z "$REDIS_PASSWORD_INPUT" ]; then
-        REDIS_PASSWORD=$(openssl rand -base64 16 | tr -d "=+/" | cut -c1-16)
-        info "已自动生成 Redis 密码: $REDIS_PASSWORD"
-    else
-        REDIS_PASSWORD="$REDIS_PASSWORD_INPUT"
-    fi
+    info "Redis 密码要求："
+    echo "  - 建议至少 8 个字符"
+    echo ""
+    
+    REDIS_PASSWORD=""
+    while true; do
+        read -sp "请输入 Redis 密码（留空将自动生成随机密码）: " REDIS_PASSWORD_INPUT
+        echo ""
+        
+        if [ -z "$REDIS_PASSWORD_INPUT" ]; then
+            REDIS_PASSWORD=$(generate_redis_password)
+            info "已自动生成 Redis 密码: $REDIS_PASSWORD"
+            break
+        else
+            local validation_error
+            validation_error=$(validate_redis_password "$REDIS_PASSWORD_INPUT" 2>&1)
+            if [ $? -eq 0 ]; then
+                REDIS_PASSWORD="$REDIS_PASSWORD_INPUT"
+                break
+            else
+                warn "密码不符合要求: $validation_error"
+                read -p "是否重新输入？(Y/n): " -n 1 -r
+                echo ""
+                if [[ $REPLY =~ ^[Nn]$ ]]; then
+                    error_exit "用户取消密码输入"
+                fi
+            fi
+        fi
+    done
     
     # 转义密码中的特殊字符，用于在 YAML 中使用（转义单引号和反斜杠）
     MYSQL_ROOT_PASSWORD_ESCAPED=$(echo "$MYSQL_ROOT_PASSWORD" | sed "s/'/''/g" | sed 's/\\/\\\\/g')
