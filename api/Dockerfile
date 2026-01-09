@@ -28,6 +28,10 @@ RUN pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 # 复制源代码
 COPY . .
 
+# 设置占位符 DATABASE_URL（prisma generate 只需要 schema，不需要真实数据库连接）
+# 使用 MySQL 格式的占位符 URL
+ENV DATABASE_URL="mysql://user:password@localhost:3306/database"
+
 # 生成 Prisma Client
 RUN pnpm prisma:generate
 
