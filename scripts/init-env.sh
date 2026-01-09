@@ -1,6 +1,6 @@
 #!/bin/bash
 # init-env.sh - CentOS 7 环境初始化脚本
-# 功能：检测并安装 git、docker-ce，配置 yum 和 docker 镜像源
+# 功能：检测并安装 git、docker-ce、docker-compose，配置 yum 和 docker 镜像源
 
 # 自动添加执行权限
 chmod +x "$0" 2>/dev/null || true
@@ -180,6 +180,45 @@ systemctl restart docker || error_exit "重启 Docker 服务失败"
 
 info "Docker 镜像源配置完成"
 
+# 5.1. 检测并安装 docker-compose
+info "检查 docker-compose..."
+
+# 检查 Docker Compose V2
+if docker compose version &> /dev/null 2>&1; then
+    info "docker compose (V2) 已安装"
+    docker compose version
+elif command -v docker-compose &> /dev/null; then
+    info "docker-compose (V1) 已安装"
+    docker-compose --version
+else
+    info "检测到 docker-compose 未安装，开始安装..."
+    
+    # 确保 yum-utils 已安装
+    if ! command -v yum-config-manager &> /dev/null; then
+        yum install -y yum-utils || error_exit "安装 yum-utils 失败"
+    fi
+    
+    # 添加 Docker 仓库（如果尚未添加）
+    if [ ! -f /etc/yum.repos.d/docker-ce.repo ]; then
+        yum-config-manager --add-repo "$DOCKER_REPO_MIRROR" || error_exit "添加 Docker 仓库失败"
+    fi
+    
+    # 安装 docker-compose-plugin (V2)
+    info "安装 docker-compose-plugin..."
+    yum install -y docker-compose-plugin || error_exit "docker-compose-plugin 安装失败"
+    
+    # 重启 Docker 服务使插件生效
+    systemctl restart docker || error_exit "重启 Docker 服务失败"
+    
+    # 验证安装
+    if docker compose version &> /dev/null 2>&1; then
+        info "docker compose (V2) 安装成功"
+        docker compose version
+    else
+        error_exit "docker-compose 安装失败，请检查安装过程"
+    fi
+fi
+
 # 6. 显示安装的软件版本
 echo ""
 info "========== 安装信息 =========="
@@ -198,6 +237,14 @@ if command -v docker &> /dev/null; then
     echo "Docker 服务状态: $(systemctl is-active docker)"
 else
     echo "Docker: 未安装"
+fi
+
+if docker compose version &> /dev/null 2>&1; then
+    echo "Docker Compose 版本: $(docker compose version | head -n 1)"
+elif command -v docker-compose &> /dev/null; then
+    echo "Docker Compose 版本: $(docker-compose --version)"
+else
+    echo "Docker Compose: 未安装"
 fi
 
 # 显示 SSH 密钥信息
