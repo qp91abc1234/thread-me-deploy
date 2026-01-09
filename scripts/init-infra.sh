@@ -160,6 +160,16 @@ validate_redis_password() {
     return 0
 }
 
+# 从字符串中随机选取一个字符
+get_random_char() {
+    local chars=$1
+    local len=${#chars}
+    # 生成 0 到 len-1 之间的随机数
+    local rand_hex=$(openssl rand -hex 2)
+    local index=$((0x${rand_hex} % len))
+    echo "${chars:$index:1}"
+}
+
 # 生成符合 MySQL 要求的随机密码
 generate_mysql_password() {
     local password=""
@@ -168,16 +178,6 @@ generate_mysql_password() {
     local digits="0123456789"
     local special="!@#\$%^&*()_+-=[]{}|;:,.<>?"
     local all_chars="$lower$upper$digits$special"
-    
-    # 使用 openssl 生成随机索引来选取字符
-    local get_random_char() {
-        local chars=$1
-        local len=${#chars}
-        # 生成 0 到 len-1 之间的随机数
-        local rand_hex=$(openssl rand -hex 2)
-        local index=$((0x${rand_hex} % len))
-        echo "${chars:$index:1}"
-    }
     
     # 确保至少包含每种类型的字符
     password+=$(get_random_char "$lower")
@@ -205,6 +205,7 @@ generate_mysql_password() {
     # 使用 Fisher-Yates 洗牌算法打乱
     local n=${#password_array[@]}
     local j
+    local rand_hex
     for ((i=$n-1; i>0; i--)); do
         rand_hex=$(openssl rand -hex 2)
         j=$((0x${rand_hex} % (i+1)))
