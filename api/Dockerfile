@@ -22,14 +22,14 @@ COPY package.json pnpm-lock.yaml ./
 # 安装依赖（如果 lockfile 不同步，先更新 lockfile 再安装）
 RUN pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 
-# 复制 Prisma schema
-COPY prisma ./prisma
-
-# 生成 Prisma Client
-RUN pnpm prisma:generate
+# # 复制 Prisma schema
+# COPY prisma ./prisma
 
 # 复制源代码
 COPY . .
+
+# 生成 Prisma Client
+RUN pnpm prisma:generate
 
 # 构建项目
 RUN pnpm build
