@@ -62,11 +62,7 @@ COPY package.json pnpm-lock.yaml ./
 # 只安装生产依赖（如果 lockfile 不同步，先更新 lockfile 再安装）
 RUN pnpm install --frozen-lockfile --prod 2>/dev/null || pnpm install --prod
 
-# 复制 Prisma schema 和生成的文件
-COPY prisma ./prisma
-COPY --from=builder /app/prisma/generated ./prisma/generated
-
-# 复制构建产物
+# 复制构建产物（包含 dist/prisma/generated，运行时不需要 schema.prisma）
 COPY --from=builder /app/dist ./dist
 
 # 复制必要的配置文件（如果存在，使用 RUN 命令处理可选文件）
