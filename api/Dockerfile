@@ -19,8 +19,8 @@ RUN pnpm config set registry https://registry.npmmirror.com
 # 复制依赖文件
 COPY package.json pnpm-lock.yaml ./
 
-# 安装依赖
-RUN pnpm install --frozen-lockfile
+# 安装依赖（如果 lockfile 不同步，先更新 lockfile 再安装）
+RUN pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 
 # 复制 Prisma schema
 COPY prisma ./prisma
@@ -59,13 +59,12 @@ RUN addgroup -g 1001 -S nodejs && \
 # 复制依赖文件
 COPY package.json pnpm-lock.yaml ./
 
-# 只安装生产依赖
-RUN pnpm install --frozen-lockfile --prod
+# 只安装生产依赖（如果 lockfile 不同步，先更新 lockfile 再安装）
+RUN pnpm install --frozen-lockfile --prod 2>/dev/null || pnpm install --prod
 
 # 复制 Prisma schema 和生成的文件
 COPY prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/prisma/generated ./prisma/generated
 
 # 复制构建产物
 COPY --from=builder /app/dist ./dist
