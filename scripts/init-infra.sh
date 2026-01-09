@@ -7,12 +7,20 @@ chmod +x "$0" 2>/dev/null || true
 
 set -e  # 遇到错误立即退出
 
-# 获取脚本所在目录
+# 获取脚本所在目录（作为独立脚本使用）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-COMPOSE_DIR="$PROJECT_ROOT/configs"
-COMPOSE_FILE="$COMPOSE_DIR/docker-compose.yml"
-ENV_FILE="$COMPOSE_DIR/.env"
+# docker-compose.yml 文件路径（放在脚本所在目录）
+COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
+
+# 数据卷目录配置（使用绝对路径）
+VOLUME_BASE_DIR="/root/volume"
+MYSQL_DATA_DIR="$VOLUME_BASE_DIR/mysql/data"
+MYSQL_CONF_DIR="$VOLUME_BASE_DIR/mysql/conf"
+REDIS_DATA_DIR="$VOLUME_BASE_DIR/redis/data"
+NGINX_HTML_DIR="$VOLUME_BASE_DIR/nginx/html"
+NGINX_LOGS_DIR="$VOLUME_BASE_DIR/nginx/logs"
+NGINX_CONF_DIR="$VOLUME_BASE_DIR/nginx/conf.d"
+NGINX_DEFAULT_CONF="$NGINX_CONF_DIR/default.conf"
 
 
 # 颜色输出
@@ -87,61 +95,77 @@ check_docker_compose() {
 # 创建目录结构
 create_directories() {
     info "创建目录结构..."
-    # 创建 Nginx 配置目录（用于挂载到容器）
-    mkdir -p "$COMPOSE_DIR/nginx/conf.d"
     
     # 创建数据目录
-    mkdir -p /root/volume/mysql/data
-    mkdir -p /root/volume/mysql/conf
-    mkdir -p /root/volume/redis/data
-    mkdir -p /root/volume/nginx/html
-    mkdir -p /root/volume/nginx/logs
+    mkdir -p "$MYSQL_DATA_DIR"
+    mkdir -p "$MYSQL_CONF_DIR"
+    mkdir -p "$REDIS_DATA_DIR"
+    mkdir -p "$NGINX_HTML_DIR"
+    mkdir -p "$NGINX_LOGS_DIR"
+    mkdir -p "$NGINX_CONF_DIR"
     
     # 设置权限
-    chmod -R 755 /root/volume
+    chmod -R 755 "$VOLUME_BASE_DIR"
     
     success "目录结构创建完成"
 }
 
-# 生成环境变量文件
-generate_env_file() {
-    if [ -f "$ENV_FILE" ]; then
-        warn "环境变量文件已存在: $ENV_FILE"
+# 生成 Nginx 默认配置文件
+generate_nginx_conf() {
+    if [ -f "$NGINX_DEFAULT_CONF" ]; then
+        warn "Nginx 配置文件已存在: $NGINX_DEFAULT_CONF"
         read -p "是否覆盖现有配置？(y/N): " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            info "跳过环境变量文件生成"
+            info "跳过 Nginx 配置文件生成"
             return 0
         fi
     fi
     
-    info "生成环境变量配置文件..."
+    info "生成 Nginx 默认配置文件..."
     
-    # 生成随机密码
-    MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-$(openssl rand -base64 16 | tr -d "=+/" | cut -c1-16)}"
-    REDIS_PASSWORD="${REDIS_PASSWORD:-$(openssl rand -base64 16 | tr -d "=+/" | cut -c1-16)}"
-    
-    cat > "$ENV_FILE" << EOF
-# MySQL 配置
-MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    cat > "$NGINX_DEFAULT_CONF" << 'EOF'
+# Nginx 默认配置文件
+# 此文件会被挂载到容器内的 /etc/nginx/conf.d/
 
-# Redis 配置
-REDIS_PASSWORD=${REDIS_PASSWORD}
+server {
+    listen 80;
+    server_name localhost;
 
-# 网络配置
-NETWORK_NAME=thread-me-network
+    root /usr/share/nginx/html;
+    index index.html index.htm;
 
-# 数据卷路径
-MYSQL_DATA_DIR=/root/volume/mysql/data
-MYSQL_CONF_DIR=/root/volume/mysql/conf
-REDIS_DATA_DIR=/root/volume/redis/data
-NGINX_HTML_DIR=/root/volume/nginx/html
-NGINX_LOGS_DIR=/root/volume/nginx/logs
+    # 日志配置
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+
+    # 安全头
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # 默认 location
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    # 健康检查端点
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+    }
+
+    # 禁止访问隐藏文件
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+}
 EOF
     
-    chmod 600 "$ENV_FILE"
-    success "环境变量文件已生成: $ENV_FILE"
-    warn "请妥善保管密码信息！"
+    success "Nginx 配置文件已生成: $NGINX_DEFAULT_CONF"
 }
 
 # 生成 docker-compose.yml
@@ -158,14 +182,32 @@ generate_docker_compose() {
     
     info "生成 docker-compose.yml 配置文件..."
     
-    # 读取环境变量
-    if [ -f "$ENV_FILE" ]; then
-        source "$ENV_FILE"
+    # 提示用户输入 MySQL root 密码
+    echo ""
+    read -sp "请输入 MySQL root 密码（留空将自动生成随机密码）: " MYSQL_ROOT_PASSWORD_INPUT
+    echo ""
+    if [ -z "$MYSQL_ROOT_PASSWORD_INPUT" ]; then
+        MYSQL_ROOT_PASSWORD=$(openssl rand -base64 16 | tr -d "=+/" | cut -c1-16)
+        info "已自动生成 MySQL root 密码: $MYSQL_ROOT_PASSWORD"
     else
-        error_exit "环境变量文件不存在，请先运行: $0 init"
+        MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD_INPUT"
     fi
     
-    cat > "$COMPOSE_FILE" << 'EOF'
+    # 提示用户输入 Redis 密码
+    read -sp "请输入 Redis 密码（留空将自动生成随机密码）: " REDIS_PASSWORD_INPUT
+    echo ""
+    if [ -z "$REDIS_PASSWORD_INPUT" ]; then
+        REDIS_PASSWORD=$(openssl rand -base64 16 | tr -d "=+/" | cut -c1-16)
+        info "已自动生成 Redis 密码: $REDIS_PASSWORD"
+    else
+        REDIS_PASSWORD="$REDIS_PASSWORD_INPUT"
+    fi
+    
+    # 转义密码中的特殊字符，用于在 YAML 中使用（转义单引号和反斜杠）
+    MYSQL_ROOT_PASSWORD_ESCAPED=$(echo "$MYSQL_ROOT_PASSWORD" | sed "s/'/''/g" | sed 's/\\/\\\\/g')
+    REDIS_PASSWORD_ESCAPED=$(echo "$REDIS_PASSWORD" | sed "s/'/''/g" | sed 's/\\/\\\\/g')
+    
+    cat > "$COMPOSE_FILE" << EOF
 version: '3.8'
 
 services:
@@ -174,7 +216,7 @@ services:
     container_name: thread-me-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: '${MYSQL_ROOT_PASSWORD_ESCAPED}'
       TZ: Asia/Shanghai
     ports:
       - "3306:3306"
@@ -188,7 +230,7 @@ services:
     networks:
       - thread-me-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD_ESCAPED}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -197,7 +239,7 @@ services:
     image: redis:7-alpine
     container_name: thread-me-redis
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    command: redis-server --requirepass ${REDIS_PASSWORD_ESCAPED} --appendonly yes
     ports:
       - "6379:6379"
     volumes:
@@ -205,7 +247,7 @@ services:
     networks:
       - thread-me-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD_ESCAPED}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -220,7 +262,7 @@ services:
     volumes:
       - ${NGINX_HTML_DIR}:/usr/share/nginx/html
       - ${NGINX_LOGS_DIR}:/var/log/nginx
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ${NGINX_CONF_DIR}:/etc/nginx/conf.d:ro
     networks:
       - thread-me-network
     depends_on:
@@ -234,12 +276,12 @@ services:
 
 networks:
   thread-me-network:
-    name: ${NETWORK_NAME}
+    name: thread-me-network
     driver: bridge
-
 EOF
     
     success "docker-compose.yml 已生成: $COMPOSE_FILE"
+    warn "请妥善保管密码信息！MySQL: $MYSQL_ROOT_PASSWORD, Redis: $REDIS_PASSWORD"
 }
 
 # 检查端口占用
@@ -275,7 +317,7 @@ init() {
     check_docker
     check_docker_compose
     create_directories
-    generate_env_file
+    generate_nginx_conf
     generate_docker_compose
     check_ports
     
@@ -289,8 +331,9 @@ init() {
     echo "  查看状态:   $0 status"
     echo "  查看日志:   $0 logs [service]"
     echo ""
-    warn "环境变量文件: $ENV_FILE"
-    warn "请妥善保管密码信息！"
+    info "配置文件位置:"
+    echo "  docker-compose.yml: $COMPOSE_FILE"
+    echo "  Nginx 配置: $NGINX_DEFAULT_CONF"
 }
 
 # 启动服务
@@ -300,8 +343,8 @@ start() {
     fi
     
     info "启动公共容器服务..."
-    cd "$COMPOSE_DIR"
-    docker_compose up -d
+    cd "$SCRIPT_DIR"
+    docker_compose -f "$COMPOSE_FILE" up -d
     
     echo ""
     success "服务启动完成！"
@@ -315,8 +358,8 @@ stop() {
     fi
     
     info "停止公共容器服务..."
-    cd "$COMPOSE_DIR"
-    docker_compose down
+    cd "$SCRIPT_DIR"
+    docker_compose -f "$COMPOSE_FILE" down
     
     success "服务已停止"
 }
@@ -328,8 +371,8 @@ restart() {
     fi
     
     info "重启公共容器服务..."
-    cd "$COMPOSE_DIR"
-    docker_compose restart
+    cd "$SCRIPT_DIR"
+    docker_compose -f "$COMPOSE_FILE" restart
     
     success "服务已重启"
 }
@@ -340,31 +383,29 @@ status() {
         error_exit "配置文件不存在，请先运行: $0 init"
     fi
     
-    cd "$COMPOSE_DIR"
+    cd "$SCRIPT_DIR"
     echo ""
     info "========== 服务状态 =========="
-    docker_compose ps
+    docker_compose -f "$COMPOSE_FILE" ps
     echo ""
     
     # 显示连接信息
-    if [ -f "$ENV_FILE" ]; then
-        source "$ENV_FILE"
-        echo ""
-        info "========== 连接信息 =========="
-        echo "MySQL:"
-        echo "  主机: localhost:3306"
-        echo "  用户: root"
-        echo ""
-        echo "Redis:"
-        echo "  主机: localhost:6379"
-        echo "  密码: ${REDIS_PASSWORD}"
-        echo ""
-        echo "Nginx:"
-        echo "  HTTP: http://localhost"
-        echo "  HTTPS: https://localhost"
-        echo ""
-        warn "完整配置信息请查看: $ENV_FILE"
-    fi
+    echo ""
+    info "========== 连接信息 =========="
+    echo "MySQL:"
+    echo "  主机: localhost:3306"
+    echo "  用户: root"
+    echo "  密码: 请查看 docker-compose.yml 文件"
+    echo ""
+    echo "Redis:"
+    echo "  主机: localhost:6379"
+    echo "  密码: 请查看 docker-compose.yml 文件"
+    echo ""
+    echo "Nginx:"
+    echo "  HTTP: http://localhost"
+    echo "  HTTPS: https://localhost"
+    echo ""
+    warn "完整配置信息请查看: $COMPOSE_FILE"
 }
 
 # 查看日志
@@ -373,11 +414,11 @@ logs() {
         error_exit "配置文件不存在，请先运行: $0 init"
     fi
     
-    cd "$COMPOSE_DIR"
+    cd "$SCRIPT_DIR"
     if [ -n "$1" ]; then
-        docker_compose logs -f "$1"
+        docker_compose -f "$COMPOSE_FILE" logs -f "$1"
     else
-        docker_compose logs -f
+        docker_compose -f "$COMPOSE_FILE" logs -f
     fi
 }
 
@@ -387,15 +428,15 @@ reload() {
         error_exit "配置文件不存在，请先运行: $0 init"
     fi
     
-    cd "$COMPOSE_DIR"
+    cd "$SCRIPT_DIR"
     
     # 检查 Nginx 服务是否运行
-    if ! docker_compose ps | grep -q "nginx.*Up"; then
+    if ! docker_compose -f "$COMPOSE_FILE" ps | grep -q "nginx.*Up"; then
         error_exit "Nginx 服务未运行，请先启动服务: $0 start"
     fi
     
     info "重载 Nginx 配置..."
-    if docker_compose exec -T nginx nginx -s reload 2>/dev/null; then
+    if docker_compose -f "$COMPOSE_FILE" exec -T nginx nginx -s reload 2>/dev/null; then
         success "Nginx 配置已重载（优雅重载，未中断服务）"
     else
         # 如果 exec 失败，尝试使用 docker exec
@@ -434,7 +475,7 @@ ${BLUE}基础设施服务管理脚本${NC}
 
 配置文件位置:
   docker-compose.yml: $COMPOSE_FILE
-  环境变量文件:        $ENV_FILE
+  Nginx 配置:         $NGINX_DEFAULT_CONF
 
 EOF
 }
