@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: thread-me-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: '{{MYSQL_ROOT_PASSWORD}}'
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - /root/volume/mysql/data:/var/lib/mysql
+      - /root/volume/mysql/conf:/etc/mysql/conf.d
+    command: 
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    networks:
+      - thread-me-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p{{MYSQL_ROOT_PASSWORD}}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: thread-me-redis
+    restart: unless-stopped
+    command: redis-server --requirepass {{REDIS_PASSWORD}} --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - /root/volume/redis/data:/data
+    networks:
+      - thread-me-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "{{REDIS_PASSWORD}}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  nginx:
+    image: nginx:alpine
+    container_name: thread-me-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /root/volume/nginx/html:/usr/share/nginx/html
+      - /root/volume/nginx/logs:/var/log/nginx
+      - /root/volume/nginx/conf.d:/etc/nginx/conf.d:ro
+    networks:
+      - thread-me-network
+    depends_on:
+      - mysql
+      - redis
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+networks:
+  thread-me-network:
+    name: thread-me-network
+    driver: bridge

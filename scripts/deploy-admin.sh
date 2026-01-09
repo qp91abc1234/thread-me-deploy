@@ -1,5 +1,5 @@
 #!/bin/bash
-# deploy.sh - Docker 构建并部署前端
+# deploy-admin.sh - Docker 构建并部署前端
 
 # 自动添加执行权限
 chmod +x "$0" 2>/dev/null || true
@@ -10,6 +10,8 @@ set -e  # 遇到错误立即退出
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # 部署项目目录（脚本所在目录的父目录）
 DEPLOY_PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# admin 目录（Dockerfile 和 .dockerignore 所在位置）
+ADMIN_DIR="$DEPLOY_PROJECT_DIR/admin"
 # 前端项目目录（与部署项目同级）
 FRONTEND_PROJECT_DIR="$(cd "$DEPLOY_PROJECT_DIR/.." && pwd)/thread-me-admin"
 
@@ -69,16 +71,16 @@ success "前端项目已找到: $FRONTEND_PROJECT_DIR"
 
 # 3. 拷贝 Dockerfile 和 .dockerignore 到前端项目目录
 info "拷贝构建文件到前端项目..."
-if [ ! -f "$SCRIPT_DIR/Dockerfile" ]; then
-    error_exit "Dockerfile 不存在: $SCRIPT_DIR/Dockerfile"
+if [ ! -f "$ADMIN_DIR/Dockerfile" ]; then
+    error_exit "Dockerfile 不存在: $ADMIN_DIR/Dockerfile"
 fi
 
-if [ ! -f "$SCRIPT_DIR/.dockerignore" ]; then
-    error_exit ".dockerignore 不存在: $SCRIPT_DIR/.dockerignore"
+if [ ! -f "$ADMIN_DIR/.dockerignore" ]; then
+    error_exit ".dockerignore 不存在: $ADMIN_DIR/.dockerignore"
 fi
 
-cp "$SCRIPT_DIR/Dockerfile" "$FRONTEND_PROJECT_DIR/Dockerfile"
-cp "$SCRIPT_DIR/.dockerignore" "$FRONTEND_PROJECT_DIR/.dockerignore"
+cp "$ADMIN_DIR/Dockerfile" "$FRONTEND_PROJECT_DIR/Dockerfile"
+cp "$ADMIN_DIR/.dockerignore" "$FRONTEND_PROJECT_DIR/.dockerignore"
 success "构建文件已拷贝到前端项目目录"
 
 # 4. 删除已存在的临时容器（如果存在）

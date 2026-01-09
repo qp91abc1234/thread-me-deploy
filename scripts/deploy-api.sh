@@ -1,5 +1,5 @@
 #!/bin/bash
-# deploy.sh - Docker 构建并部署后端 API
+# deploy-api.sh - Docker 构建并部署后端 API
 
 # 自动添加执行权限
 chmod +x "$0" 2>/dev/null || true
@@ -10,6 +10,8 @@ set -e  # 遇到错误立即退出
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # 部署项目目录（脚本所在目录的父目录）
 DEPLOY_PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# api 目录（Dockerfile 和 .dockerignore 所在位置）
+API_DIR="$DEPLOY_PROJECT_DIR/api"
 # 后端项目目录（与部署项目同级）
 BACKEND_PROJECT_DIR="$(cd "$DEPLOY_PROJECT_DIR/.." && pwd)/thread-me-api"
 # 配置文件目录
@@ -79,16 +81,16 @@ success "环境变量文件已找到: $CONFIGS_DIR/.env.production"
 
 # 4. 拷贝 Dockerfile 和 .dockerignore 到后端项目目录
 info "拷贝构建文件到后端项目..."
-if [ ! -f "$SCRIPT_DIR/Dockerfile" ]; then
-    error_exit "Dockerfile 不存在: $SCRIPT_DIR/Dockerfile"
+if [ ! -f "$API_DIR/Dockerfile" ]; then
+    error_exit "Dockerfile 不存在: $API_DIR/Dockerfile"
 fi
 
-if [ ! -f "$SCRIPT_DIR/.dockerignore" ]; then
-    error_exit ".dockerignore 不存在: $SCRIPT_DIR/.dockerignore"
+if [ ! -f "$API_DIR/.dockerignore" ]; then
+    error_exit ".dockerignore 不存在: $API_DIR/.dockerignore"
 fi
 
-cp "$SCRIPT_DIR/Dockerfile" "$BACKEND_PROJECT_DIR/Dockerfile"
-cp "$SCRIPT_DIR/.dockerignore" "$BACKEND_PROJECT_DIR/.dockerignore"
+cp "$API_DIR/Dockerfile" "$BACKEND_PROJECT_DIR/Dockerfile"
+cp "$API_DIR/.dockerignore" "$BACKEND_PROJECT_DIR/.dockerignore"
 success "构建文件已拷贝到后端项目目录"
 
 # 5. 检查 Docker 网络（用于与其他服务通信）
