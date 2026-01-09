@@ -8,8 +8,16 @@ chmod +x "$0" 2>/dev/null || true
 set -e  # 遇到错误立即退出
 
 # 配置变量
+# Git 配置
 GIT_EMAIL="350018736@qq.com"
 GIT_NAME="zcc"
+
+# Yum 镜像源配置
+YUM_MIRROR_BASE="http://mirrors.aliyun.com"
+
+# Docker 镜像源配置
+DOCKER_MIRROR="https://docker.1ms.run"
+DOCKER_REPO_MIRROR="https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo"
 
 # 颜色输出
 RED='\033[0;31m'
@@ -42,27 +50,27 @@ info "开始初始化环境..."
 
 # 2. 配置 yum 阿里云镜像源
 info "配置 yum 阿里云镜像源..."
-cat > /etc/yum.repos.d/CentOS-Base.repo << 'EOF'
+cat > /etc/yum.repos.d/CentOS-Base.repo << EOF
 [base]
-name=CentOS-$releasever - Base - mirrors.aliyun.com
+name=CentOS-\$releasever - Base - mirrors.aliyun.com
 failovermethod=priority
-baseurl=http://mirrors.aliyun.com/centos/$releasever/os/$basearch/
+baseurl=${YUM_MIRROR_BASE}/centos/\$releasever/os/\$basearch/
 gpgcheck=1
-gpgkey=http://mirrors.aliyun.com/centos/RPM-GPG-KEY-CentOS-7
+gpgkey=${YUM_MIRROR_BASE}/centos/RPM-GPG-KEY-CentOS-7
 
 [updates]
-name=CentOS-$releasever - Updates - mirrors.aliyun.com
+name=CentOS-\$releasever - Updates - mirrors.aliyun.com
 failovermethod=priority
-baseurl=http://mirrors.aliyun.com/centos/$releasever/updates/$basearch/
+baseurl=${YUM_MIRROR_BASE}/centos/\$releasever/updates/\$basearch/
 gpgcheck=1
-gpgkey=http://mirrors.aliyun.com/centos/RPM-GPG-KEY-CentOS-7
+gpgkey=${YUM_MIRROR_BASE}/centos/RPM-GPG-KEY-CentOS-7
 
 [extras]
-name=CentOS-$releasever - Extras - mirrors.aliyun.com
+name=CentOS-\$releasever - Extras - mirrors.aliyun.com
 failovermethod=priority
-baseurl=http://mirrors.aliyun.com/centos/$releasever/extras/$basearch/
+baseurl=${YUM_MIRROR_BASE}/centos/\$releasever/extras/\$basearch/
 gpgcheck=1
-gpgkey=http://mirrors.aliyun.com/centos/RPM-GPG-KEY-CentOS-7
+gpgkey=${YUM_MIRROR_BASE}/centos/RPM-GPG-KEY-CentOS-7
 EOF
 
 # 清理 yum 缓存
@@ -135,7 +143,7 @@ else
     yum install -y yum-utils device-mapper-persistent-data lvm2 || error_exit "安装 docker 依赖失败"
     
     # 添加 Docker 官方仓库（使用阿里云镜像加速）
-    yum-config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo || error_exit "添加 Docker 仓库失败"
+    yum-config-manager --add-repo "$DOCKER_REPO_MIRROR" || error_exit "添加 Docker 仓库失败"
     
     # 安装 docker-ce
     yum install -y docker-ce || error_exit "docker-ce 安装失败，请检查网络连接和仓库配置"
@@ -160,9 +168,9 @@ if [ -f /etc/docker/daemon.json ]; then
 fi
 
 # 创建或覆盖 daemon.json
-cat > /etc/docker/daemon.json << 'EOF'
+cat > /etc/docker/daemon.json << EOF
 {
-  "registry-mirrors": ["https://docker.1ms.run"]
+  "registry-mirrors": ["${DOCKER_MIRROR}"]
 }
 EOF
 
