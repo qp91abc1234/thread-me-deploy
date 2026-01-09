@@ -8,7 +8,7 @@
 
 ```bash
 cd /path/to/thread-me-deploy/scripts
-sudo ./setup-common-services.sh init
+sudo ./infra.sh init
 ```
 
 初始化过程会：
@@ -21,25 +21,25 @@ sudo ./setup-common-services.sh init
 ### 2. 启动服务
 
 ```bash
-sudo ./setup-common-services.sh start
+sudo ./infra.sh start
 ```
 
 ### 3. 查看服务状态
 
 ```bash
-sudo ./setup-common-services.sh status
+sudo ./infra.sh status
 ```
 
 ### 4. 查看日志
 
 ```bash
 # 查看所有服务日志
-sudo ./setup-common-services.sh logs
+sudo ./infra.sh logs
 
 # 查看特定服务日志
-sudo ./setup-common-services.sh logs mysql
-sudo ./setup-common-services.sh logs redis
-sudo ./setup-common-services.sh logs nginx
+sudo ./infra.sh logs mysql
+sudo ./infra.sh logs redis
+sudo ./infra.sh logs nginx
 ```
 
 ## 服务说明
