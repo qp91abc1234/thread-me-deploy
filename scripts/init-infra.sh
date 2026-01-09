@@ -284,6 +284,8 @@ init() {
     info "使用以下命令管理服务："
     echo "  启动服务:   $0 start"
     echo "  停止服务:   $0 stop"
+    echo "  重启服务:   $0 restart"
+    echo "  重载配置:   $0 reload            # 修改 Nginx 配置后使用"
     echo "  查看状态:   $0 status"
     echo "  查看日志:   $0 logs [service]"
     echo ""
@@ -379,6 +381,32 @@ logs() {
     fi
 }
 
+# 重载 Nginx 配置（优雅重载，不中断服务）
+reload() {
+    if [ ! -f "$COMPOSE_FILE" ]; then
+        error_exit "配置文件不存在，请先运行: $0 init"
+    fi
+    
+    cd "$COMPOSE_DIR"
+    
+    # 检查 Nginx 服务是否运行
+    if ! docker_compose ps | grep -q "nginx.*Up"; then
+        error_exit "Nginx 服务未运行，请先启动服务: $0 start"
+    fi
+    
+    info "重载 Nginx 配置..."
+    if docker_compose exec -T nginx nginx -s reload 2>/dev/null; then
+        success "Nginx 配置已重载（优雅重载，未中断服务）"
+    else
+        # 如果 exec 失败，尝试使用 docker exec
+        if docker exec thread-me-nginx nginx -s reload 2>/dev/null; then
+            success "Nginx 配置已重载（优雅重载，未中断服务）"
+        else
+            error_exit "Nginx 重载失败，请检查配置是否正确"
+        fi
+    fi
+}
+
 # 显示帮助信息
 show_help() {
     cat << EOF
@@ -391,6 +419,7 @@ ${BLUE}基础设施服务管理脚本${NC}
   start            启动所有服务
   stop             停止所有服务
   restart          重启所有服务
+  reload           重载 Nginx 配置（优雅重载不中断服务）
   status           查看服务状态
   logs [service]   查看服务日志（可指定服务名：mysql/redis/nginx）
   help             显示此帮助信息
@@ -399,6 +428,7 @@ ${BLUE}基础设施服务管理脚本${NC}
   $0 init                    # 首次运行，初始化配置
   $0 start                   # 启动所有服务
   $0 status                  # 查看服务状态
+  $0 reload                  # 重载 Nginx 配置（修改配置后使用）
   $0 logs mysql              # 查看 MySQL 日志
   $0 logs                    # 查看所有服务日志
 
@@ -439,6 +469,11 @@ main() {
             check_docker
             check_docker_compose
             logs "$2"
+            ;;
+        reload)
+            check_docker
+            check_docker_compose
+            reload
             ;;
         help|--help|-h)
             show_help
