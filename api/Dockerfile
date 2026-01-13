@@ -58,17 +58,21 @@ RUN addgroup -g 1001 -S nodejs && \
     adduser -S nestjs -u 1001
 
 # 复制依赖文件
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml prisma.config.ts ./
+COPY /prisma/schema.prisma ./prisma/
+COPY /prisma/migrations ./prisma/migrations/
 
 # 只安装生产依赖（如果 lockfile 不同步，先更新 lockfile 再安装）
 RUN pnpm install --frozen-lockfile --prod 2>/dev/null || pnpm install --prod
 
+# 再安装构建所需的开发依赖（根据实际需要调整）
+RUN pnpm install --frozen-lockfile \
+    prisma \
+    tsconfig-paths \
+    2>/dev/null || pnpm install prisma tsconfig-paths
+
 # 复制构建产物（包含 dist/prisma/generated，运行时不需要 schema.prisma）
 COPY --from=builder /app/dist ./dist
-
-# 复制必要的配置文件（如果存在，使用 RUN 命令处理可选文件）
-RUN --mount=type=bind,from=builder,source=/app/prisma.config.ts,target=/tmp/prisma.config.ts \
-    cp /tmp/prisma.config.ts ./prisma.config.ts 2>/dev/null || true
 
 # 设置权限
 RUN chown -R nestjs:nodejs /app
@@ -83,5 +87,11 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://127.0.0.1:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
 
-# 启动应用
-CMD ["node", "dist/src/main.js"]
+# 启动应用（按顺序执行：迁移 → 种子数据（可选）→ 收集权限 → 启动应用）
+# 调试时添加: || tail -f /dev/null
+CMD sh -c "\
+  npx prisma migrate deploy && \
+  ([ \"$RUN_SEED\" = \"true\" ] && node dist/scripts/prisma-seed.js || true) && \
+  node dist/scripts/collect-api-permissions.js && \
+  node dist/src/main.js || tail -f /dev/null" 
+
