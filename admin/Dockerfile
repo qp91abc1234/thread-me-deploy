@@ -23,5 +23,8 @@ COPY . .
 RUN pnpm build
 
 # 最终阶段：只保留构建产物
-FROM scratch AS export
+FROM alpine:latest AS export
+
+# 添加一个最小的 CMD，满足 docker create 的要求（虽然不会真正执行）
+CMD ["/bin/sh"]
 COPY --from=builder /app/dist /dist
