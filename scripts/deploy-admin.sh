@@ -135,6 +135,7 @@ cp -r "$FRONTEND_PROJECT_DIR/dist"/* "${DEPLOY_DIR}/"
 
 # 12. 清理前端项目目录中的临时文件
 info "清理临时文件..."
+rm -f "$FRONTEND_PROJECT_DIR/.env.production.local"
 rm -f "$FRONTEND_PROJECT_DIR/Dockerfile"
 rm -f "$FRONTEND_PROJECT_DIR/.dockerignore"
 rm -rf "$FRONTEND_PROJECT_DIR/dist"
