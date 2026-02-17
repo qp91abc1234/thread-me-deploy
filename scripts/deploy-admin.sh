@@ -20,7 +20,7 @@ CONFIGS_DIR="$DEPLOY_PROJECT_DIR/configs"
 # 配置（与 init-infra.sh 中的路径保持一致）
 VOLUME_BASE_DIR="/root/volume"
 NGINX_HTML_DIR="$VOLUME_BASE_DIR/nginx/html"
-DEPLOY_DIR="$NGINX_HTML_DIR/admin"
+DEPLOY_DIR="$NGINX_HTML_DIR"
 
 IMAGE_NAME="thread-me-admin"
 CONTAINER_NAME="thread-me-admin-temp"
