@@ -14,6 +14,8 @@ DEPLOY_PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ADMIN_DIR="$DEPLOY_PROJECT_DIR/admin"
 # 前端项目目录（与部署项目同级）
 FRONTEND_PROJECT_DIR="$(cd "$DEPLOY_PROJECT_DIR/.." && pwd)/thread-me-admin"
+# 配置文件目录
+CONFIGS_DIR="$DEPLOY_PROJECT_DIR/configs"
 
 # 配置（与 init-infra.sh 中的路径保持一致）
 VOLUME_BASE_DIR="/root/volume"
@@ -69,8 +71,13 @@ fi
 
 success "前端项目已找到: $FRONTEND_PROJECT_DIR"
 
-# 3. 拷贝 Dockerfile 和 .dockerignore 到前端项目目录
+# 3. 拷贝 .env.production.local、Dockerfile 和 .dockerignore 到前端项目目录
 info "拷贝构建文件到前端项目..."
+
+if [ ! -f "$CONFIGS_DIR/admin/.env.production.local" ]; then
+    error_exit ".env.production.local 不存在: $CONFIGS_DIR/admin/.env.production.local"     
+fi
+
 if [ ! -f "$ADMIN_DIR/Dockerfile" ]; then
     error_exit "Dockerfile 不存在: $ADMIN_DIR/Dockerfile"
 fi
@@ -79,6 +86,7 @@ if [ ! -f "$ADMIN_DIR/.dockerignore" ]; then
     error_exit ".dockerignore 不存在: $ADMIN_DIR/.dockerignore"
 fi
 
+cp "$CONFIGS_DIR/admin/.env.production.local" "$FRONTEND_PROJECT_DIR/.env.production.local"
 cp "$ADMIN_DIR/Dockerfile" "$FRONTEND_PROJECT_DIR/Dockerfile"
 cp "$ADMIN_DIR/.dockerignore" "$FRONTEND_PROJECT_DIR/.dockerignore"
 success "构建文件已拷贝到前端项目目录"

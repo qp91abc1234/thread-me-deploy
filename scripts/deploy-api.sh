@@ -74,10 +74,10 @@ success "后端项目已找到: $BACKEND_PROJECT_DIR"
 
 # 3. 检查环境变量文件
 info "检查环境变量文件..."
-if [ ! -f "$CONFIGS_DIR/.env.production" ]; then
-    error_exit "未找到 .env.production 文件: $CONFIGS_DIR/.env.production\n请确保已在 configs 目录下配置生产环境变量"
+if [ ! -f "$CONFIGS_DIR/api/.env.production" ]; then
+    error_exit "未找到 .env.production 文件: $CONFIGS_DIR/api/.env.production\n请确保已在 configs 目录下配置生产环境变量"
 fi
-success "环境变量文件已找到: $CONFIGS_DIR/.env.production"
+success "环境变量文件已找到: $CONFIGS_DIR/api/.env.production"
 
 # 4. 拷贝 Dockerfile 和 .dockerignore 到后端项目目录
 info "拷贝构建文件到后端项目..."
@@ -118,7 +118,7 @@ docker build -t "${IMAGE_NAME}" .
 
 # 8. 运行新容器
 info "启动新容器: ${CONTAINER_NAME}"
-info "使用环境变量文件: $CONFIGS_DIR/.env.production"
+info "使用环境变量文件: $CONFIGS_DIR/api/.env.production"
 
 # 运行容器
 docker run -d \
@@ -126,7 +126,7 @@ docker run -d \
     --network "${NETWORK_NAME}" \
     --restart unless-stopped \
     -p 3000:3000 \
-    --env-file "$CONFIGS_DIR/.env.production" \
+    --env-file "$CONFIGS_DIR/api/.env.production" \
     "${IMAGE_NAME}" || error_exit "启动容器失败"
 
 success "容器已启动"
