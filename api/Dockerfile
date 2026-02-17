@@ -81,11 +81,11 @@ RUN chown -R nestjs:nodejs /app
 USER nestjs
 
 # 暴露端口
-EXPOSE 3000
+EXPOSE 3300
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://127.0.0.1:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
+  CMD node -e "require('http').get('http://127.0.0.1:3300/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
 
 # 启动应用（按顺序执行：迁移 → 种子数据（可选）→ 收集权限 → 启动应用）
 # 调试时添加: || tail -f /dev/null

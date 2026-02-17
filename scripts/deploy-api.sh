@@ -125,7 +125,7 @@ docker run -d \
     --name "${CONTAINER_NAME}" \
     --network "${NETWORK_NAME}" \
     --restart unless-stopped \
-    -p 3000:3000 \
+    -p 3300:3300 \
     --env-file "$CONFIGS_DIR/api/.env.production" \
     "${IMAGE_NAME}" || error_exit "启动容器失败"
 
@@ -151,7 +151,7 @@ fi
 echo ""
 success "========== 部署完成 =========="
 info "API 服务已部署，容器名称: ${CONTAINER_NAME}"
-info "API 访问地址: http://localhost:3000"
+info "API 访问地址: http://localhost:3300"
 info "查看日志: docker logs -f ${CONTAINER_NAME}"
 info "停止服务: docker stop ${CONTAINER_NAME}"
 info "重启服务: docker restart ${CONTAINER_NAME}"
