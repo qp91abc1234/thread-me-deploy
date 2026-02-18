@@ -20,7 +20,8 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 
 # 构建前端项目
-RUN pnpm build
+RUN --mount=type=secret,id=oss_env \
+    set -a && . /run/secrets/oss_env && set +a && pnpm build
 
 # 最终阶段：只保留构建产物
 FROM alpine:latest AS export
